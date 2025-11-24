@@ -10,24 +10,49 @@ local filepath = import("path/filepath")
 
 
 local treeBuffer
+local viewBuffer
 
-local openKey = 'o'
+local openKey = "o"
 
-
-
+local treeTable = {}
+local outView = ""
 
 -- 1. Initialize the plugin
 function init()
     -- Create a command ':mytree'
     -- ========== WORKING ==================
     config.MakeCommand("mytree", openTree, config.NoComplete)
-
+    config.MakeCommand("filetree", openTree, config.NoComplete)
 end
 
--- 2. The function that runs when you type :mytree
+-- 2. functions that catches eventes
+-- catches special keys
+function preAction(bp, action)
+
+    return true
+end
+
+-- catches standard keys
+function preRune(bp, action)
+    if bp.Buf.Settings["filetype"] ~= "filetree" then return true end
+
+    if action == openKey then
+        -- micro.InfoBar("Opening")
+        selectItem(bp)
+        return false -- this blocks natural reaction
+    end
+
+    return true
+end
+-- 3.
+-- Function on command mytree or filetree
 function openTree(bp)
-    -- Run the 'ls' command to get file list, -a for getting also hidden files
-    treeOutput = loadContentOfFolder(".")
+    viewBuffer = bp
+    treeTable = fetchFiles(".")
+    outView = treeTableToString(treeTable,"")
+
+
+    -- treeOutput = loadContentOfFolder(".")
 
     rebuildView()
 
@@ -84,15 +109,15 @@ function fileNode(name, parentPath)
 end
 
 function fetchFiles(homeFolder)
-    local treeTable = {}
+    local tabTree = {}
 
     local out = loadContentOfFolder(homeFolder)
 
     for line in out:gmatch("[^\r\n]+") do
-        table.insert(treeTable, fileNode(line, homeFolder))
+        table.insert(tabTree, fileNode(line, homeFolder))
     end
 
-    return treeTable
+    return tabTree
 end
 
 function treeTableToString(treeTable, stringToEveryLine)
@@ -119,14 +144,70 @@ function treeTableToString(treeTable, stringToEveryLine)
 end
 
 function rebuildView()
-    local treeTable = fetchFiles(".")
-    local output = treeTableToString(treeTable,"")
+    outView = treeTableToString(treeTable, 0)
+    if (treeBuffer~=nil) then
+        treeBuffer.Type.Readonly = false
+        treeBuffer:Replace(treeBuffer:Start(), treeBuffer:End(), outView)
 
+        treeBuffer.Type.Readonly = true
+        return
+    end
 
-    treeBuffer = buffer.NewBuffer(output, "fileTree")
+    treeBuffer = buffer.NewBuffer(outView, "fileTree")
     treeBuffer.Type.Scratch = true
     treeBuffer.Type.Readonly = true
-    treeBuffer:SetOption("filetype", "mytree")
+    treeBuffer:SetOption("filetype", "filetree")
+end
+
+
+
+function findItemByLine(nodes, lineId, currentLine)
+    for _, file in pairs(nodes) do
+            currentLine = currentLine + 1
+
+            if currentLine == lineId then
+                return file, currentLine
+            end
+
+            if file.isDir and file.expanded then
+                local foundNode, updatedLine = findItemByLine(file.children, lineId, currentLine)
+
+                if foundNode then
+                    return foundNode, updatedLine
+                end
+
+                currentLine = updatedLine
+            end
+        end
+
+        return nil, currentLine
+
+end
+
+
+function selectItem(bp)
+    local cursorY = bp.Cursor.Loc.Y
+
+    -- +3 to move from 0 to 1 (tables in lua are from 1) and skip . and ..
+    local node, nodeId = findItemByLine(treeTable, cursorY+3, 0)
+
+    -- For safety:
+    if node == nil then
+        return
+    end
+
+    if node.isDir then
+        if node.expanded then
+            node.expanded = false
+        else
+            node.expanded = true
+        end
+        rebuildView()
+    else
+        openFile(viewBuffer, node.path)
+    end
+
+
 end
 
 
