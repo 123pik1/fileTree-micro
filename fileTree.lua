@@ -86,7 +86,11 @@ function openFile(bp, fileName)
 end
 
 function openFileInTab(bp, filePath)
-    bp:HandleCommand("tab "..filePath)
+    -- bp:HandleCommand("tab "..filePath)
+    local cmd = string.format("tab %q", filePath)
+
+        -- Execute
+        bp:HandleCommand(cmd)
 end
 
 function fileNode(name, parentPath)
@@ -96,6 +100,10 @@ function fileNode(name, parentPath)
 		isDir = true
 		cleanName = string.sub(name, 1, -2)
 	end
+	local lastChar = string.sub(cleanName, -1)
+	    if lastChar == "*" or lastChar == "@" or lastChar == "|" or lastChar == "=" then
+	        cleanName = string.sub(cleanName, 1, -2)
+	    end
 	return {
 		name = cleanName,
 		path = filepath.Join(parentPath, cleanName),
