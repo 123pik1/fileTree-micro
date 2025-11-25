@@ -49,7 +49,7 @@ end
 function openTree(bp)
 	viewBuffer = bp
 	treeTable = fetchFiles(".")
-	outView = treeTableToString(treeTable, "")
+	outView = treeTableToString(treeTable, 0)
 
 	rebuildView()
 
@@ -121,9 +121,9 @@ end
 
 function treeTableToString(treeTab, depth)
 	local tmp = ""
-
-	for k, file in pairs(treeTab) do
-		-- tmp = tmp..stringToEveryLine
+    local indent = string.rep(" ",depth)
+	for k, file in ipairs(treeTab) do
+        tmp = tmp..indent
 		if file.name ~= "." and file.name ~= ".." then
 			if file.isDir then
 				if file.expanded then
@@ -157,10 +157,14 @@ function rebuildView()
 	treeBuffer.Type.Scratch = true
 	treeBuffer.Type.Readonly = true
 	treeBuffer:SetOption("filetype", "filetree")
+	treeBuffer:SetOption("softwrap", "false")
+	treeBuffer:SetOption("ruler", "false")
+	treeBuffer:SetOption("statusformatl", "File Tree")
+	treeBuffer:SetOption("statusformatr", "")
 end
 
 function findItemByLine(nodes, lineId, currentLine)
-	for _, file in pairs(nodes) do
+	for _, file in ipairs(nodes) do
 		currentLine = currentLine + 1
 
 		if currentLine == lineId then
