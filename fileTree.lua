@@ -49,23 +49,20 @@ function processAction(bp, action)
 		selectItem(bp)
 		return false -- this blocks natural reaction
 	end
-
 	if action == newFileKey then
 		createFile(bp)
 		return false
 	end
-
 	if action == newFolderKey then
 		createFolder(bp)
 		return false
 	end
-
 	if action == removeKey then
 		remove(bp)
 		return false
 	end
-
 	if action == renameKey then
+		rename(bp)
 		return false
 	end
 
@@ -185,7 +182,7 @@ end
 
 -- ==============================
 -- =========== FINDING ==========
--- ===============================
+-- ==============================
 
 function findItemByLine(nodes, lineId, currentLine)
 	for _, file in ipairs(nodes) do
@@ -235,11 +232,11 @@ function selectItem(bp)
 end
 
 function createFolder(bp)
-	enterName(bp, "Folder", "Enter folder name")
+	enterName(bp, "Folder", "Enter folder name ")
 end
 
 function createFile(bp)
-	enterName(bp, "File", "Enter file name")
+	enterName(bp, "File", "Enter file name ")
 end
 
 function enterName(bp, option, promptMessage)
@@ -303,6 +300,29 @@ function remove(bp)
 	end
 	treeTable = fetchFiles(".")
 	rebuildView()
+end
+
+function rename(bp)
+	local cursorY = bp.Cursor.Loc.Y
+	local node, _ = findItemByLine(treeTable, cursorY + 1, 0)
+
+	if node == nil then
+		return
+	end
+
+	micro.InfoBar():Prompt("How would you like to name this file? ", "", "file", nil, function(input)
+		if input == "" then
+			return
+		end
+
+		local newPath = filepath.Dir(node.path) .. "/" .. input
+
+		local err = shell.RunCommand('mv "' .. node.path .. '" "' .. newPath .. '"')
+
+		treeTable = fetchFiles(".")
+		rebuildView()
+		bp.Cursor.Loc.Y = cursorY
+	end)
 end
 
 -- ===========================
