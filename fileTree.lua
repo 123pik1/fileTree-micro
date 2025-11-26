@@ -17,6 +17,7 @@ local newFolderKey = "f"
 local removeKey = "z"
 local renameKey = "r"
 local runKey = "e"
+local alternativeOpenKey = "Enter"
 
 local treeTable = {}
 local outView = ""
@@ -27,6 +28,7 @@ local baseDir
 function init()
 	-- ========== WORKING ==================
 	config.MakeCommand("filetree", openTree, config.NoComplete)
+	config.MakeCommand("treeSelect", selectItem, config.NoComplete)
 	baseDir, _ = os.Getwd()
 end
 
@@ -73,6 +75,7 @@ function processAction(bp, action)
         run(bp)
         return false
 	end
+
 
 	return true
 end
@@ -374,4 +377,5 @@ function rebuildView()
 	treeBuffer:SetOption("ruler", "false")
 	treeBuffer:SetOption("statusformatl", "File Tree")
 	treeBuffer:SetOption("statusformatr", "")
+	config.TryBindKey(alternativeOpenKey, "command:treeSelect", false)
 end
