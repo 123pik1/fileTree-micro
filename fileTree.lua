@@ -28,7 +28,7 @@ local baseDir
 function init()
 	-- ========== WORKING ==================
 	config.MakeCommand("filetree", openTree, config.NoComplete)
-	config.MakeCommand("treeSelect", selectItem, config.NoComplete)
+	-- config.MakeCommand("treeSelect", selectItem, config.NoComplete)
 	baseDir, _ = os.Getwd()
 end
 
@@ -72,10 +72,9 @@ function processAction(bp, action)
 		return false
 	end
 	if action == runKey then
-        run(bp)
-        return false
+		run(bp)
+		return false
 	end
-
 
 	return true
 end
@@ -223,6 +222,10 @@ end
 -- ===============================
 
 function selectItem(bp)
+	if bp.Buf.Settings["filetype"] ~= "filetree" then
+		return
+	end
+
 	local cursorY = bp.Cursor.Loc.Y
 
 	-- +1  0 to 1 (tables in lua are from 1)
@@ -232,7 +235,7 @@ function selectItem(bp)
 	if node == nil then
 		return
 	end
-        micro.InfoBar():Message(node.path)
+	micro.InfoBar():Message(node.path)
 
 	if node.isDir then
 		node.expanded = not node.expanded
@@ -342,18 +345,16 @@ function run(bp)
 	local cursorY = bp.Cursor.Loc.Y
 	local node, _ = findItemByLine(treeTable, cursorY + 1, 0)
 
-    micro.InfoBar():Message(node.path)
+	micro.InfoBar():Message(node.path)
 	if node == nil then
 		return
 	end
 
-    local cmd = string.format("%q", node.path)
+	local cmd = string.format("%q", node.path)
 
-    shell.RunCommand("chmod +x "..cmd)
-    shell.RunInteractiveShell(cmd, true,false)
-
+	shell.RunCommand("chmod +x " .. cmd)
+	shell.RunInteractiveShell(cmd, true, false)
 end
-
 
 -- ===========================
 -- =========== VIEW ==========
@@ -377,5 +378,5 @@ function rebuildView()
 	treeBuffer:SetOption("ruler", "false")
 	treeBuffer:SetOption("statusformatl", "File Tree")
 	treeBuffer:SetOption("statusformatr", "")
-	config.TryBindKey(alternativeOpenKey, "command:treeSelect", false)
+	-- config.TryBindKey(alternativeOpenKey, "command:treeSelect", false)
 end
