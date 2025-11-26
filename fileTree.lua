@@ -1,4 +1,4 @@
-VERSION = "0.0.2"
+VERSION = "0.0.3"
 
 local micro = import("micro")
 local command = import("micro/command")
@@ -14,6 +14,8 @@ local viewBuffer
 local openKey = "o"
 local newFileKey = "n"
 local newFolderKey = "f"
+local removeKey = "z"
+local renameKey = "r"
 
 local treeTable = {}
 local outView = ""
@@ -55,6 +57,15 @@ function processAction(bp, action)
 
 	if action == newFolderKey then
 		createFolder(bp)
+		return false
+	end
+
+	if action == removeKey then
+		remove(bp)
+		return false
+	end
+
+	if action == renameKey then
 		return false
 	end
 
@@ -273,6 +284,25 @@ function enterName(bp, option, promptMessage)
 		rebuildView()
 		bp.Cursor.Loc.Y = cursorY
 	end)
+end
+
+-- removes file or folder
+function remove(bp)
+	local cursorY = bp.Cursor.Loc.Y
+	local node, _ = findItemByLine(treeTable, cursorY + 1, 0)
+
+	if node == nil then
+		return
+	end
+	local err
+	if node.isDir then
+		-- local err = os.Rmdir
+		err = shell.RunCommand('rm -r "' .. node.path .. '"')
+	else
+		err = shell.RunCommand('rm "' .. node.path .. '"')
+	end
+	treeTable = fetchFiles(".")
+	rebuildView()
 end
 
 -- ===========================
