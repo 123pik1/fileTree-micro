@@ -16,20 +16,24 @@ local newFileKey = "n"
 local newFolderKey = "f"
 local removeKey = "z"
 local renameKey = "r"
+local runKey = "e"
 
 local treeTable = {}
 local outView = ""
+
+local baseDir
 
 -- 1. Initialize the plugin
 function init()
 	-- ========== WORKING ==================
 	config.MakeCommand("filetree", openTree, config.NoComplete)
+	baseDir, _ = os.Getwd()
 end
 
 -- Function on command mytree or filetree
 function openTree(bp)
 	viewBuffer = bp
-	treeTable = fetchFiles(".")
+	treeTable = fetchFiles(baseDir)
 	outView = treeTableToString(treeTable, 0)
 
 	rebuildView()
@@ -64,6 +68,10 @@ function processAction(bp, action)
 	if action == renameKey then
 		rename(bp)
 		return false
+	end
+	if action == runKey then
+        run(bp)
+        return false
 	end
 
 	return true
@@ -171,6 +179,7 @@ function fileNode(name, parentPath)
 	if lastChar == "*" or lastChar == "@" or lastChar == "|" or lastChar == "=" then
 		cleanName = string.sub(cleanName, 1, -2)
 	end
+
 	return {
 		name = cleanName,
 		path = filepath.Join(parentPath, cleanName),
@@ -220,6 +229,7 @@ function selectItem(bp)
 	if node == nil then
 		return
 	end
+        micro.InfoBar():Message(node.path)
 
 	if node.isDir then
 		node.expanded = not node.expanded
@@ -277,7 +287,7 @@ function enterName(bp, option, promptMessage)
 				micro.InfoBar():Error("Error creating file: " .. tostring(err))
 			end
 		end
-		treeTable = fetchFiles(".")
+		treeTable = fetchFiles(baseDir)
 		rebuildView()
 		bp.Cursor.Loc.Y = cursorY
 	end)
@@ -298,7 +308,7 @@ function remove(bp)
 	else
 		err = shell.RunCommand('rm "' .. node.path .. '"')
 	end
-	treeTable = fetchFiles(".")
+	treeTable = fetchFiles(baseDir)
 	rebuildView()
 end
 
@@ -319,11 +329,28 @@ function rename(bp)
 
 		local err = shell.RunCommand('mv "' .. node.path .. '" "' .. newPath .. '"')
 
-		treeTable = fetchFiles(".")
+		treeTable = fetchFiles(baseDir)
 		rebuildView()
 		bp.Cursor.Loc.Y = cursorY
 	end)
 end
+
+function run(bp)
+	local cursorY = bp.Cursor.Loc.Y
+	local node, _ = findItemByLine(treeTable, cursorY + 1, 0)
+
+    micro.InfoBar():Message(node.path)
+	if node == nil then
+		return
+	end
+
+    local cmd = string.format("%q", node.path)
+
+    shell.RunCommand("chmod +x "..cmd)
+    shell.RunInteractiveShell(cmd, true,false)
+
+end
+
 
 -- ===========================
 -- =========== VIEW ==========
