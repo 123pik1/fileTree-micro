@@ -1,0 +1,15 @@
+{
+    "Name": "filetree",
+    "Description": "A file tree plugin for the micro editor.",
+    "Website": "https://github.com/123pik1/filetree-micro",
+    "Tags": ["filetree", "navigation", "utility"],
+    "Versions": [
+        {
+            "Version": "1.0.0",
+            "Url": "https://github.com/123pik1/filetree-micro/archive/v1.0.0.zip",
+            "Require": {
+                "micro": ">=2.0.0"
+            }
+        }
+    ]
+}

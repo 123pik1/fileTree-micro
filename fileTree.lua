@@ -1,5 +1,6 @@
-VERSION = "0.0.3"
+VERSION = "0.1.1"
 
+local json = import("json")
 local micro = import("micro")
 local command = import("micro/command")
 local config = import("micro/config")
@@ -10,6 +11,8 @@ local filepath = import("path/filepath")
 
 local treeBuffer
 local viewBuffer
+
+local settingsPath = "settings.json"
 
 local openKey = "o"
 local newFileKey = "n"
@@ -22,16 +25,69 @@ local alternativeOpenKey = "Enter"
 local treeTable = {}
 local outView = ""
 
+local basePaneSize = 150
+
 local baseDir
 
 -- 1. Initialize the plugin
 function init()
+	-- settingsPath = filepath.Join(config.ConfigDir, "settings.json")
+
+    if config.ConfigDir then
+        settingsPath = filepath.Join(config.ConfigDir,"plug","filetree", "settings.json")
+    else
+        local home = os.Getenv("HOME") or os.Getenv("USERPROFILE")
+        if home then
+             settingsPath = filepath.Join(home, ".config/micro/plug/filetree/settings.json")
+        else
+            settingsPath = "settings.json"
+        end
+    end
+
+
+	loadVarsFromJson()
 	-- ========== WORKING ==================
 	config.MakeCommand("filetree", openTree, config.NoComplete)
 	-- config.MakeCommand("treeSelect", selectItem, config.NoComplete)
 	baseDir, _ = os.Getwd()
 end
 
+function loadVarsFromJson()
+
+    if not json then
+        micro.InfoBar():Error("FileTree: JSON library not loaded")
+        return
+    end
+
+
+	local file_handle, error_message = io.open(settingsPath, "r")
+
+	if not file_handle then
+		return
+	end
+
+	local json_string = file_handle:read("*a")
+
+	file_handle:close()
+
+	if json_string:sub(1, 1) ~= "{" then
+	        micro.InfoBar():Error("Settings corrupted: File does not start with '{'. Resetting.")
+	        return
+	    end
+
+	if not json_string or json_string:match("^%s*$") then
+		return
+	end
+
+	for key, val in json_string:gmatch('"([^"]+)"%s*:%s*"([^"]+)"') do
+	        if key == "open" then openKey = val end
+	        if key == "newFile" then newFileKey = val end
+	        if key == "newFolder" then newFolderKey = val end
+	        if key == "remove" then removeKey = val end
+	        if key == "rename" then renameKey = val end
+	        if key == "run" or key == "execute" then runKey = val end
+	    end
+end
 -- Function on command mytree or filetree
 function openTree(bp)
 	viewBuffer = bp
@@ -42,7 +98,7 @@ function openTree(bp)
 
 	micro.CurPane():VSplitIndex(treeBuffer, true)
 
-	micro.CurPane():ResizePane(180)
+	micro.CurPane():ResizePane(basePaneSize)
 end
 
 -- =============================================
@@ -278,7 +334,7 @@ function enterName(bp, option, promptMessage)
 		local fullPath = path .. "/" .. input
 
 		if option == "Folder" then
-			local err = os.Mkdir(fullPath, 0755)
+			local err = os.Mkdir(fullPath, 777)
 			if err ~= nil then
 				micro.InfoBar():Error("Error creating folder: " .. tostring(err))
 			else
@@ -307,15 +363,20 @@ function remove(bp)
 	if node == nil then
 		return
 	end
-	local err
-	if node.isDir then
-		-- local err = os.Rmdir
-		err = shell.RunCommand('rm -r "' .. node.path .. '"')
-	else
-		err = shell.RunCommand('rm "' .. node.path .. '"')
-	end
-	treeTable = fetchFiles(baseDir)
-	rebuildView()
+	micro.InfoBar():Prompt("Are you sure you want to delete? [y/n] ", "", "file", nil, function(input)
+		if input ~= "y" and input ~= "Y" then
+			return
+		end
+		local err
+		if node.isDir then
+			-- local err = os.Rmdir
+			err = shell.RunCommand('rm -r "' .. node.path .. '"')
+		else
+			err = shell.RunCommand('rm "' .. node.path .. '"')
+		end
+		treeTable = fetchFiles(baseDir)
+		rebuildView()
+	end)
 end
 
 function rename(bp)
