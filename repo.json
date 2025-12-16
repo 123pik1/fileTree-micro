@@ -5,7 +5,7 @@
     "Tags": ["filetree", "navigation", "utility"],
     "Versions": [
         {
-            "Version": "1.0.0",
+            "Version": "0.1.1",
             "Url": "https://github.com/123pik1/filetree-micro/archive/v1.0.0.zip",
             "Require": {
                 "micro": ">=2.0.0"
