@@ -1,6 +1,6 @@
-VERSION = "0.1.1"
+VERSION = "1.0.1"
 
-local json = import("json")
+local json = import("encoding/json")
 local micro = import("micro")
 local command = import("micro/command")
 local config = import("micro/config")
@@ -9,10 +9,12 @@ local shell = import("micro/shell")
 local os = import("os")
 local filepath = import("path/filepath")
 
+
 local treeBuffer
 local viewBuffer
 
 local settingsPath = "settings.json"
+local workspacesPath = "workspaces.json"
 
 local openKey = "o"
 local newFileKey = "n"
@@ -33,32 +35,35 @@ local baseDir
 function init()
 	-- settingsPath = filepath.Join(config.ConfigDir, "settings.json")
 
-    if config.ConfigDir then
-        settingsPath = filepath.Join(config.ConfigDir,"plug","filetree", "settings.json")
-    else
-        local home = os.Getenv("HOME") or os.Getenv("USERPROFILE")
-        if home then
-             settingsPath = filepath.Join(home, ".config/micro/plug/filetree/settings.json")
-        else
-            settingsPath = "settings.json"
-        end
-    end
+	if config.ConfigDir then
+		settingsPath = filepath.Join(config.ConfigDir, "plug", "filetree", "settings.json")
+        workspacesPath = filepath.Join(config.ConfigDir,"plug", "filetree", workspacesPath)
+	else
+		local home = os.Getenv("HOME") or os.Getenv("USERPROFILE")
+		if home then
+			settingsPath = filepath.Join(home, ".config/micro/plug/filetree/settings.json")
+			workspacesPath = filepath.Join(home, ".config/micro/plug/filetree", workspacesPath)
+		else
+			settingsPath = "settings.json"
+		end
+	end
 
 
 	loadVarsFromJson()
 	-- ========== WORKING ==================
 	config.MakeCommand("filetree", openTree, config.NoComplete)
-	-- config.MakeCommand("treeSelect", selectItem, config.NoComplete)
+	config.MakeCommand("ws-add", actualiseWorkspace, config.NoComplete)
+    config.MakeCommand("ws-pring", printWorkspaces, config.NoComplete)
+
 	baseDir, _ = os.Getwd()
 end
 
+
 function loadVarsFromJson()
-
-    if not json then
-        micro.InfoBar():Error("FileTree: JSON library not loaded")
-        return
-    end
-
+	if not json then
+		micro.InfoBar():Error("FileTree: JSON library not loaded")
+		return
+	end
 
 	local file_handle, error_message = io.open(settingsPath, "r")
 
@@ -71,23 +76,36 @@ function loadVarsFromJson()
 	file_handle:close()
 
 	if json_string:sub(1, 1) ~= "{" then
-	        micro.InfoBar():Error("Settings corrupted: File does not start with '{'. Resetting.")
-	        return
-	    end
+		micro.InfoBar():Error("Settings corrupted: File does not start with '{'. Resetting.")
+		return
+	end
 
 	if not json_string or json_string:match("^%s*$") then
 		return
 	end
 
 	for key, val in json_string:gmatch('"([^"]+)"%s*:%s*"([^"]+)"') do
-	        if key == "open" then openKey = val end
-	        if key == "newFile" then newFileKey = val end
-	        if key == "newFolder" then newFolderKey = val end
-	        if key == "remove" then removeKey = val end
-	        if key == "rename" then renameKey = val end
-	        if key == "run" or key == "execute" then runKey = val end
-	    end
+		if key == "open" then
+			openKey = val
+		end
+		if key == "newFile" then
+			newFileKey = val
+		end
+		if key == "newFolder" then
+			newFolderKey = val
+		end
+		if key == "remove" then
+			removeKey = val
+		end
+		if key == "rename" then
+			renameKey = val
+		end
+		if key == "run" or key == "execute" then
+			runKey = val
+		end
+	end
 end
+
 -- Function on command mytree or filetree
 function openTree(bp)
 	viewBuffer = bp
@@ -247,6 +265,14 @@ function fileNode(name, parentPath)
 	}
 end
 
+
+function workspace(name, path)
+    return {
+        name = name,
+        path = path,
+    }
+end
+
 -- ==============================
 -- =========== FINDING ==========
 -- ==============================
@@ -297,7 +323,6 @@ function selectItem(bp)
 		node.expanded = not node.expanded
 		rebuildView()
 	else
-		-- openFile(viewBuffer, node.path)
 		openFileInTab(viewBuffer, node.path)
 	end
 	bp.Cursor.Loc.Y = cursorY
@@ -417,6 +442,66 @@ function run(bp)
 	shell.RunInteractiveShell(cmd, true, false)
 end
 
+
+function getWorkspaces()
+
+
+    -- if there is no file - return empty table
+    local _, err = os.Stat(workspacesPath)
+    if err ~= nil then
+        return {}
+    end
+
+
+    -- workspaces from file set
+    local ws = nil
+
+    local file_handle, error_message = io.open(workspacesPath, "r")
+
+    if file_handle == nil then
+        return
+    end
+
+    local json_string = file_handle:read("*a")
+
+    file_handle:close()
+
+    local status, workspaces = pcall(function()
+        local decoded = {}
+        json.Unmarshall(json_string,decoded)
+        return decoded
+    end)
+
+    if status then
+        return workspaces
+    else
+        micro.Log("Failed to parse workspaces.json. Is it valid JSON?")
+        return {}
+    end
+
+end
+
+
+-- modifies existing workspace or adds new
+function actualiseWorkspace(bp)
+    micro.InfoBar():Prompt("Enter name for workspace to which this directory should belong (if name alread exists it will be rewritten)",
+    "","worskpace",nil,
+    function(input)
+    if input == "" then return end
+
+    local ws_s = getWorkspaces(bp)
+
+
+    end)
+end
+
+
+-- creates workspace
+function createWorkspace(bp)
+    actualiseWorkspace(bp)
+end
+
+
 -- ===========================
 -- =========== VIEW ==========
 -- ===========================
@@ -440,4 +525,31 @@ function rebuildView()
 	treeBuffer:SetOption("statusformatl", "File Tree")
 	treeBuffer:SetOption("statusformatr", "")
 	-- config.TryBindKey(alternativeOpenKey, "command:treeSelect", false)
+end
+
+function printWorkspaces(bp)
+    workspaces = getWorkspaces()
+
+    local output = ""
+
+
+    local count = 0
+
+    for name, path in pairs(workspaces) do
+        output = output .. string.format("%-20s %s", name, path)
+        count = count +1
+    end
+
+    if count == 0 then
+        output = output .. "Currently there are no workspaces added"
+    end
+
+    local bufferForWs = buffer.NewBuffer(output, "Workspaces")
+    bufferForWs.Type = buffer.BTScratch
+
+    bufferForWs:SetOption("statusline", false)
+    bufferForWs:SetOption("gutter", false)
+
+    micro.CurTab():NewPane(bufferForWs)
+
 end
