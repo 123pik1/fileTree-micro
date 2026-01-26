@@ -51,6 +51,8 @@ function init()
 	config.MakeCommand("filetree", openTree, config.NoComplete)
 	config.MakeCommand("ws-add", actualiseWorkspace, config.NoComplete)
 	config.MakeCommand("ws-list", printWorkspaces, config.NoComplete)
+    config.MakeCommand("ws-del", deleteWorkspace, config.NoComplete)
+
 
 	baseDir, _ = os.Getwd()
 end
@@ -190,6 +192,36 @@ function fetchFiles(homeFolder)
 	end
 
 	return tabTree
+end
+
+function getWorkspaces()
+	-- if there is no file - return empty table
+	local _, err = os.Stat(workspacesPath)
+	if err ~= nil then
+		return {}
+	end
+
+	-- workspaces from file set
+	local ws = nil
+
+	local file_handle, error_message = io.open(workspacesPath, "r")
+
+	if file_handle == nil then
+		return
+	end
+
+	local json_string = file_handle:read("*a")
+
+	file_handle:close()
+
+    local workspaces = {}
+
+    -- emergency function for decoding json
+	for name, path in json_string:gmatch('"([^"]+)"%s*:%s*"([^"]+)"') do
+        table.insert(workspaces, workspace(name, path))
+    end
+
+    return workspaces
 end
 
 -- =======================================
@@ -439,40 +471,40 @@ end
 
 
 
--- Should be moved to "fetching" yard
-function getWorkspaces()
-	-- if there is no file - return empty table
-	local _, err = os.Stat(workspacesPath)
-	if err ~= nil then
-		return {}
-	end
+function deleteWorkspace(bp, workspace)
+    micro.InfoBar():Prompt("Enter workspace for delete ", "", "workspace", nil, function(input)
+        if input == "" then
+            return
+        end
 
-	-- workspaces from file set
-	local ws = nil
+        local ws_s = getWorkspaces(bp)
+        local new_ws_s = {}
 
-	local file_handle, error_message = io.open(workspacesPath, "r")
+        local deleted = false
 
-	if file_handle == nil then
-		return
-	end
+        for _, element in ipairs(ws_s) do
+            if element.name ~= input then
+                table.insert(new_ws_s, element)
+            else
+                deleted = true
+                micro.InfoBar():Message("Workspace being deleted")
+            end
+        end
 
-	local json_string = file_handle:read("*a")
+        if not deleted then
+            micro.InfoBar():Message("There is no workspace with this name")
+        end
 
-	file_handle:close()
+        saveWorkspaces(bp, new_ws_s)
 
-    local workspaces = {}
+        -- micro.InfoBar():Message("Workspace deleted")
+        micro.InfoBar():Message(new_ws_s)
 
-    -- emergency function for decoding json
-	for name, path in json_string:gmatch('"([^"]+)"%s*:%s*"([^"]+)"') do
-        table.insert(workspaces, workspace(name, path))
-    end
-
-    return workspaces
+    end)
 end
 
 
 function saveWorkspaces(bp, workspaces)
-
 
     local data = "{\n"
 
@@ -492,13 +524,14 @@ function saveWorkspaces(bp, workspaces)
     else
         micro.InfoBar:Message("error opening file to save")
     end
+
 end
 
 -- modifies existing workspace or adds new
 -- no input function returns - expected behaviour
 function actualiseWorkspace(bp)
 	micro.InfoBar():Prompt(
-		"Enter name for workspace to which this directory should belong (if name alread exists it will be rewritten)",
+		"Enter name for workspace to which this directory should belong (if name alread exists it will be rewritten) ",
 		"",
 		"worskpace",
 		nil,
