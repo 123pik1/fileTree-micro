@@ -32,7 +32,6 @@ local baseDir
 
 -- 1. Initialize the plugin
 function init()
-
 	if config.ConfigDir then
 		settingsPath = filepath.Join(config.ConfigDir, "plug", "filetree", "settings.json")
 		workspacesPath = filepath.Join(config.ConfigDir, "plug", "filetree", workspacesPath)
@@ -51,8 +50,8 @@ function init()
 	config.MakeCommand("filetree", openTree, config.NoComplete)
 	config.MakeCommand("ws-add", actualiseWorkspace, config.NoComplete)
 	config.MakeCommand("ws-list", printWorkspaces, config.NoComplete)
-    config.MakeCommand("ws-del", deleteWorkspace, config.NoComplete)
-
+	config.MakeCommand("ws-del", deleteWorkspace, config.NoComplete)
+	-- config.MakeCommand("ws-open", openWorkspace, )
 
 	baseDir, _ = os.Getwd()
 end
@@ -214,14 +213,14 @@ function getWorkspaces()
 
 	file_handle:close()
 
-    local workspaces = {}
+	local workspaces = {}
 
-    -- emergency function for decoding json
+	-- emergency function for decoding json
 	for name, path in json_string:gmatch('"([^"]+)"%s*:%s*"([^"]+)"') do
-        table.insert(workspaces, workspace(name, path))
-    end
+		table.insert(workspaces, workspace(name, path))
+	end
 
-    return workspaces
+	return workspaces
 end
 
 -- =======================================
@@ -469,62 +468,55 @@ function run(bp)
 	shell.RunInteractiveShell(cmd, true, false)
 end
 
-
-
 function deleteWorkspace(bp, workspace)
-    micro.InfoBar():Prompt("Enter workspace for delete ", "", "workspace", nil, function(input)
-        if input == "" then
-            return
-        end
+	micro.InfoBar():Prompt("Enter workspace for delete ", "", "workspace", nil, function(input)
+		if input == "" then
+			return
+		end
 
-        local ws_s = getWorkspaces(bp)
-        local new_ws_s = {}
+		local ws_s = getWorkspaces(bp)
+		local new_ws_s = {}
 
-        local deleted = false
+		local deleted = false
 
-        for _, element in ipairs(ws_s) do
-            if element.name ~= input then
-                table.insert(new_ws_s, element)
-            else
-                deleted = true
-                micro.InfoBar():Message("Workspace being deleted")
-            end
-        end
+		for _, element in ipairs(ws_s) do
+			if element.name ~= input then
+				table.insert(new_ws_s, element)
+			else
+				deleted = true
+				micro.InfoBar():Message("Workspace being deleted")
+			end
+		end
 
-        if not deleted then
-            micro.InfoBar():Message("There is no workspace with this name")
-        end
+		if not deleted then
+			micro.InfoBar():Message("There is no workspace with this name")
+		end
 
-        saveWorkspaces(bp, new_ws_s)
+		saveWorkspaces(bp, new_ws_s)
 
-        -- micro.InfoBar():Message("Workspace deleted")
-        micro.InfoBar():Message(new_ws_s)
-
-    end)
+		-- micro.InfoBar():Message("Workspace deleted")
+		micro.InfoBar():Message(new_ws_s)
+	end)
 end
 
-
 function saveWorkspaces(bp, workspaces)
+	local data = "{\n"
 
-    local data = "{\n"
+	for index, element in ipairs(workspaces) do
+		data = data .. '"' .. element.name .. '" : "' .. element.path .. '"\n'
+	end
 
-    for index, element in ipairs(workspaces) do
-        data = data.."\""..element.name.."\" : \""..element.path.."\"\n"
-    end
+	data = data .. "\n}"
 
-    data = data.."\n}"
+	local file_handle, err = io.open(workspacesPath, "w")
 
-    local file_handle, err = io.open(workspacesPath, "w")
+	if file_handle then
+		file_handle:write(data)
 
-    if file_handle then
-        file_handle:write(data)
-
-        file_handle:close()
-
-    else
-        micro.InfoBar:Message("error opening file to save")
-    end
-
+		file_handle:close()
+	else
+		micro.InfoBar:Message("error opening file to save")
+	end
 end
 
 -- modifies existing workspace or adds new
@@ -540,23 +532,22 @@ function actualiseWorkspace(bp)
 				return
 			end
 
-            -- all workspaces
+			-- all workspaces
 			local ws_s = getWorkspaces(bp)
-            local found = false
+			local found = false
 
-            for _, ws in ipairs(ws_s) do
-                if ws.name == input then
-                    ws.path = baseDir
-                    found = true
-                    break
-                end
-            end
+			for _, ws in ipairs(ws_s) do
+				if ws.name == input then
+					ws.path = baseDir
+					found = true
+					break
+				end
+			end
 
-            if not found then
-                table.insert(ws_s,workspace(input, baseDir))
-            end
-            saveWorkspaces(bp,ws_s)
-
+			if not found then
+				table.insert(ws_s, workspace(input, baseDir))
+			end
+			saveWorkspaces(bp, ws_s)
 		end
 	)
 end
@@ -598,7 +589,7 @@ function printWorkspaces(bp)
 	local count = 0
 
 	for key, workspaceElement in pairs(workspaces) do
-		output = output .. string.format("%-20s %s", workspaceElement.name, workspaceElement.path).."\n"
+		output = output .. string.format("%-20s %s", workspaceElement.name, workspaceElement.path) .. "\n"
 		count = count + 1
 	end
 
@@ -608,5 +599,5 @@ function printWorkspaces(bp)
 
 	local bufferForWs = buffer.NewBuffer(output, "Workspaces")
 
-    bp:HSplitBuf(bufferForWs)
+	bp:HSplitBuf(bufferForWs)
 end
