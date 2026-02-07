@@ -385,7 +385,8 @@ function enterName(bp, option, promptMessage)
 		local fullPath = path .. "/" .. input
 
 		if option == "Folder" then
-			local err = os.Mkdir(fullPath, 777)
+			local err = os.Mkdir(fullPath, 511)
+			-- os.Execute("chmod 777 " .. fullPath)
 			if err ~= nil then
 				micro.InfoBar():Error("Error creating folder: " .. tostring(err))
 			else
