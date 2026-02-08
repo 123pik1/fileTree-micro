@@ -1,6 +1,6 @@
-VERSION = "0.1.1"
+VERSION = "1.0.1"
 
-local json = import("json")
+local json = import("encoding/json")
 local micro = import("micro")
 local command = import("micro/command")
 local config = import("micro/config")
@@ -13,6 +13,7 @@ local treeBuffer
 local viewBuffer
 
 local settingsPath = "settings.json"
+local workspacesPath = "workspaces.json"
 
 local openKey = "o"
 local newFileKey = "n"
@@ -31,34 +32,35 @@ local baseDir
 
 -- 1. Initialize the plugin
 function init()
-	-- settingsPath = filepath.Join(config.ConfigDir, "settings.json")
-
-    if config.ConfigDir then
-        settingsPath = filepath.Join(config.ConfigDir,"plug","filetree", "settings.json")
-    else
-        local home = os.Getenv("HOME") or os.Getenv("USERPROFILE")
-        if home then
-             settingsPath = filepath.Join(home, ".config/micro/plug/filetree/settings.json")
-        else
-            settingsPath = "settings.json"
-        end
-    end
-
+	if config.ConfigDir then
+		settingsPath = filepath.Join(config.ConfigDir, "plug", "filetree", "settings.json")
+		workspacesPath = filepath.Join(config.ConfigDir, "plug", "filetree", workspacesPath)
+	else
+		local home = os.Getenv("HOME") or os.Getenv("USERPROFILE")
+		if home then
+			settingsPath = filepath.Join(home, ".config/micro/plug/filetree/settings.json")
+			workspacesPath = filepath.Join(home, ".config/micro/plug/filetree", workspacesPath)
+		else
+			settingsPath = "settings.json"
+		end
+	end
 
 	loadVarsFromJson()
 	-- ========== WORKING ==================
 	config.MakeCommand("filetree", openTree, config.NoComplete)
-	-- config.MakeCommand("treeSelect", selectItem, config.NoComplete)
+	config.MakeCommand("ws-add", actualiseWorkspace, config.NoComplete)
+	config.MakeCommand("ws-list", printWorkspaces, config.NoComplete)
+	config.MakeCommand("ws-del", deleteWorkspace, config.NoComplete)
+	config.MakeCommand("ws-open", openWorkspace, config.NoComplete)
+
 	baseDir, _ = os.Getwd()
 end
 
 function loadVarsFromJson()
-
-    if not json then
-        micro.InfoBar():Error("FileTree: JSON library not loaded")
-        return
-    end
-
+	if not json then
+		micro.InfoBar():Error("FileTree: JSON library not loaded")
+		return
+	end
 
 	local file_handle, error_message = io.open(settingsPath, "r")
 
@@ -71,23 +73,36 @@ function loadVarsFromJson()
 	file_handle:close()
 
 	if json_string:sub(1, 1) ~= "{" then
-	        micro.InfoBar():Error("Settings corrupted: File does not start with '{'. Resetting.")
-	        return
-	    end
+		micro.InfoBar():Error("Settings corrupted: File does not start with '{'. Resetting.")
+		return
+	end
 
 	if not json_string or json_string:match("^%s*$") then
 		return
 	end
 
 	for key, val in json_string:gmatch('"([^"]+)"%s*:%s*"([^"]+)"') do
-	        if key == "open" then openKey = val end
-	        if key == "newFile" then newFileKey = val end
-	        if key == "newFolder" then newFolderKey = val end
-	        if key == "remove" then removeKey = val end
-	        if key == "rename" then renameKey = val end
-	        if key == "run" or key == "execute" then runKey = val end
-	    end
+		if key == "open" then
+			openKey = val
+		end
+		if key == "newFile" then
+			newFileKey = val
+		end
+		if key == "newFolder" then
+			newFolderKey = val
+		end
+		if key == "remove" then
+			removeKey = val
+		end
+		if key == "rename" then
+			renameKey = val
+		end
+		if key == "run" or key == "execute" then
+			runKey = val
+		end
+	end
 end
+
 -- Function on command mytree or filetree
 function openTree(bp)
 	viewBuffer = bp
@@ -178,6 +193,36 @@ function fetchFiles(homeFolder)
 	return tabTree
 end
 
+function getWorkspaces()
+	-- if there is no file - return empty table
+	local _, err = os.Stat(workspacesPath)
+	if err ~= nil then
+		return {}
+	end
+
+	-- workspaces from file set
+	local ws = nil
+
+	local file_handle, error_message = io.open(workspacesPath, "r")
+
+	if file_handle == nil then
+		return
+	end
+
+	local json_string = file_handle:read("*a")
+
+	file_handle:close()
+
+	local workspaces = {}
+
+	-- emergency function for decoding json
+	for name, path in json_string:gmatch('"([^"]+)"%s*:%s*"([^"]+)"') do
+		table.insert(workspaces, workspace(name, path))
+	end
+
+	return workspaces
+end
+
 -- =======================================
 -- =============== FILE OPENING ==========
 -- =======================================
@@ -247,6 +292,13 @@ function fileNode(name, parentPath)
 	}
 end
 
+function workspace(name, path)
+	return {
+		name = name,
+		path = path,
+	}
+end
+
 -- ==============================
 -- =========== FINDING ==========
 -- ==============================
@@ -297,7 +349,6 @@ function selectItem(bp)
 		node.expanded = not node.expanded
 		rebuildView()
 	else
-		-- openFile(viewBuffer, node.path)
 		openFileInTab(viewBuffer, node.path)
 	end
 	bp.Cursor.Loc.Y = cursorY
@@ -334,7 +385,8 @@ function enterName(bp, option, promptMessage)
 		local fullPath = path .. "/" .. input
 
 		if option == "Folder" then
-			local err = os.Mkdir(fullPath, 777)
+			local err = os.Mkdir(fullPath, 511)
+			-- os.Execute("chmod 777 " .. fullPath)
 			if err ~= nil then
 				micro.InfoBar():Error("Error creating folder: " .. tostring(err))
 			else
@@ -417,6 +469,150 @@ function run(bp)
 	shell.RunInteractiveShell(cmd, true, false)
 end
 
+function deleteWorkspace(bp, workspace)
+    local allWorkspaces = getWorkspaces()
+	micro.InfoBar():Prompt("Enter workspace for delete ", "", "workspace",
+    function (input)
+        return workspaceCompletion(input, allWorkspaces)
+    end
+	,
+	function(input)
+		if input == "" then
+			return
+		end
+
+		local ws_s = getWorkspaces()
+		local new_ws_s = {}
+
+		local deleted = false
+
+		for _, element in ipairs(ws_s) do
+			if element.name ~= input then
+				table.insert(new_ws_s, element)
+			else
+				deleted = true
+				micro.InfoBar():Message("Workspace being deleted")
+			end
+		end
+
+		if not deleted then
+			micro.InfoBar():Message("There is no workspace with this name")
+		end
+
+		saveWorkspaces(bp, new_ws_s)
+
+		micro.InfoBar():Message("Workspace deleted")
+	end)
+end
+
+function saveWorkspaces(bp, workspaces)
+
+    local lines = {}
+
+    for _, element in ipairs(workspaces) do
+
+        local entry = string.format('\t"%s" : "%s"', element.name, element.path)
+        table.insert(lines, entry)
+    end
+
+    local jsonString = '{\n'.. table.concat(lines, ',\n')..'\n}'
+
+	local file_handle, err = io.open(workspacesPath, "w")
+
+	if file_handle then
+		file_handle:write(jsonString)
+
+		file_handle:close()
+	else
+		micro.InfoBar():Message("error opening file to save")
+	end
+end
+
+function workspaceCompletion(input, allWorkspaces)
+    local matches = {}
+
+    for _, ws in ipairs(allWorkspaces) do
+        local matchStr = ws.name
+        if string.find(matchStr, "^"..input) then
+            table.insert(matches, matchStr)
+        end
+    end
+    return matches
+end
+
+
+-- modifies existing workspace or adds new
+-- no input function returns - expected behaviour
+function actualiseWorkspace(bp)
+	micro.InfoBar():Prompt(
+		"Enter name for workspace to which this directory should belong (if name alread exists it will be rewritten) ",
+		"",
+		"workspace",
+		nil,
+		function(input)
+			if input == "" then
+				return
+			end
+
+			-- all workspaces
+			local ws_s = getWorkspaces()
+			local found = false
+
+			for _, ws in ipairs(ws_s) do
+				if ws.name == input then
+					ws.path = baseDir
+					found = true
+					break
+				end
+			end
+
+			if not found then
+				table.insert(ws_s, workspace(input, baseDir))
+			end
+			saveWorkspaces(bp, ws_s)
+		end
+	)
+end
+
+-- creates workspace
+function createWorkspace(bp)
+	actualiseWorkspace(bp)
+end
+
+function openWorkspace(bp)
+
+    local allWorkspaces = getWorkspaces()
+
+    micro.InfoBar():Prompt("Enter name of workspace to open ", "", "workspace",
+    function(input)
+        return workspaceCompletion(input, allWorkspaces)
+    end
+    ,
+    function(input)
+        if input == "" then return end
+
+        local found = false
+
+        for _, ws in ipairs(allWorkspaces) do
+            if ws.name == input then
+                baseDir = ws.path
+                found = true
+                break
+            end
+        end
+
+        if found then
+            treeTable = fetchFiles(baseDir)
+            rebuildView()
+            micro.InfoBar():Message("Switched to workspace: "..input)
+        else
+            micro.InfoBar():Message("There is now workspace with name: "..input)
+        end
+
+    end
+    )
+end
+
 -- ===========================
 -- =========== VIEW ==========
 -- ===========================
@@ -439,5 +635,25 @@ function rebuildView()
 	treeBuffer:SetOption("ruler", "false")
 	treeBuffer:SetOption("statusformatl", "File Tree")
 	treeBuffer:SetOption("statusformatr", "")
-	-- config.TryBindKey(alternativeOpenKey, "command:treeSelect", false)
+end
+
+function printWorkspaces(bp)
+	local workspaces = getWorkspaces()
+
+	local output = ""
+
+	local count = 0
+
+	for key, workspaceElement in pairs(workspaces) do
+		output = output .. string.format("%-20s %s", workspaceElement.name, workspaceElement.path) .. "\n"
+		count = count + 1
+	end
+
+	if count == 0 then
+		output = output .. "Currently there are no workspaces added"
+	end
+
+	local bufferForWs = buffer.NewBuffer(output, "Workspaces")
+
+	bp:HSplitBuf(bufferForWs)
 end
