@@ -470,11 +470,8 @@ function run(bp)
 end
 
 function deleteWorkspace(bp, workspace)
-    local allWorkspaces = getWorkspaces()
-	micro.InfoBar():Prompt("Enter workspace for delete ", "", "workspace",
-    function (input)
-        return workspaceCompletion(input, allWorkspaces)
-    end
+	local _ = micro.InfoBar():Prompt("Enter workspace for delete ", "", "workspace",
+    nil
 	,
 	function(input)
 		if input == "" then
@@ -528,7 +525,8 @@ function saveWorkspaces(bp, workspaces)
 	end
 end
 
-function workspaceCompletion(input, allWorkspaces)
+function workspaceCompletion(input)
+    local allWorkspaces = getWorkspaces()
     local matches = {}
 
     for _, ws in ipairs(allWorkspaces) do
@@ -537,7 +535,7 @@ function workspaceCompletion(input, allWorkspaces)
             table.insert(matches, matchStr)
         end
     end
-    return matches
+    return  matches, {input}
 end
 
 
@@ -581,34 +579,33 @@ end
 
 function openWorkspace(bp)
 
-    local allWorkspaces = getWorkspaces()
 
-    micro.InfoBar():Prompt("Enter name of workspace to open ", "", "workspace",
-    function(input)
-        return workspaceCompletion(input, allWorkspaces)
-    end
+    micro.InfoBar():Prompt("Enter name of workspace to open ", "","workspace",
+    -- workspaceCompletion
+    nil
     ,
     function(input)
-        if input == "" then return end
+        if input ~= "" then
 
-        local found = false
+            local found = false
+            local allWorkspaces = getWorkspaces()
 
-        for _, ws in ipairs(allWorkspaces) do
-            if ws.name == input then
-                baseDir = ws.path
-                found = true
-                break
+            for _, ws in ipairs(allWorkspaces) do
+                if ws.name == input then
+                    baseDir = ws.path
+                    found = true
+                    break
+                end
+            end
+
+            if found then
+                treeTable = fetchFiles(baseDir)
+                rebuildView()
+                micro.InfoBar():Message("Switched to workspace: "..input)
+            else
+                micro.InfoBar():Message("There is no workspace with name: "..input)
             end
         end
-
-        if found then
-            treeTable = fetchFiles(baseDir)
-            rebuildView()
-            micro.InfoBar():Message("Switched to workspace: "..input)
-        else
-            micro.InfoBar():Message("There is now workspace with name: "..input)
-        end
-
     end
     )
 end
