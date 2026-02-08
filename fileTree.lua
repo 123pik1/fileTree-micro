@@ -51,7 +51,7 @@ function init()
 	config.MakeCommand("ws-add", actualiseWorkspace, config.NoComplete)
 	config.MakeCommand("ws-list", printWorkspaces, config.NoComplete)
 	config.MakeCommand("ws-del", deleteWorkspace, config.NoComplete)
-	-- config.MakeCommand("ws-open", openWorkspace, )
+	config.MakeCommand("ws-open", openWorkspace, config.NoComplete)
 
 	baseDir, _ = os.Getwd()
 end
@@ -470,12 +470,18 @@ function run(bp)
 end
 
 function deleteWorkspace(bp, workspace)
-	micro.InfoBar():Prompt("Enter workspace for delete ", "", "workspace", nil, function(input)
+    local allWorkspaces = getWorkspaces()
+	micro.InfoBar():Prompt("Enter workspace for delete ", "", "workspace",
+    function (input)
+        return workspaceCompletion(input, allWorkspaces)
+    end
+	,
+	function(input)
 		if input == "" then
 			return
 		end
 
-		local ws_s = getWorkspaces(bp)
+		local ws_s = getWorkspaces()
 		local new_ws_s = {}
 
 		local deleted = false
@@ -495,30 +501,45 @@ function deleteWorkspace(bp, workspace)
 
 		saveWorkspaces(bp, new_ws_s)
 
-		-- micro.InfoBar():Message("Workspace deleted")
-		micro.InfoBar():Message(new_ws_s)
+		micro.InfoBar():Message("Workspace deleted")
 	end)
 end
 
 function saveWorkspaces(bp, workspaces)
-	local data = "{\n"
 
-	for index, element in ipairs(workspaces) do
-		data = data .. '"' .. element.name .. '" : "' .. element.path .. '"\n'
-	end
+    local lines = {}
 
-	data = data .. "\n}"
+    for _, element in ipairs(workspaces) do
+
+        local entry = string.format('\t"%s" : "%s"', element.name, element.path)
+        table.insert(lines, entry)
+    end
+
+    local jsonString = '{\n'.. table.concat(lines, ',\n')..'\n}'
 
 	local file_handle, err = io.open(workspacesPath, "w")
 
 	if file_handle then
-		file_handle:write(data)
+		file_handle:write(jsonString)
 
 		file_handle:close()
 	else
-		micro.InfoBar:Message("error opening file to save")
+		micro.InfoBar():Message("error opening file to save")
 	end
 end
+
+function workspaceCompletion(input, allWorkspaces)
+    local matches = {}
+
+    for _, ws in ipairs(allWorkspaces) do
+        local matchStr = ws.name
+        if string.find(matchStr, "^"..input) then
+            table.insert(matches, matchStr)
+        end
+    end
+    return matches
+end
+
 
 -- modifies existing workspace or adds new
 -- no input function returns - expected behaviour
@@ -526,7 +547,7 @@ function actualiseWorkspace(bp)
 	micro.InfoBar():Prompt(
 		"Enter name for workspace to which this directory should belong (if name alread exists it will be rewritten) ",
 		"",
-		"worskpace",
+		"workspace",
 		nil,
 		function(input)
 			if input == "" then
@@ -534,7 +555,7 @@ function actualiseWorkspace(bp)
 			end
 
 			-- all workspaces
-			local ws_s = getWorkspaces(bp)
+			local ws_s = getWorkspaces()
 			local found = false
 
 			for _, ws in ipairs(ws_s) do
@@ -556,6 +577,40 @@ end
 -- creates workspace
 function createWorkspace(bp)
 	actualiseWorkspace(bp)
+end
+
+function openWorkspace(bp)
+
+    local allWorkspaces = getWorkspaces()
+
+    micro.InfoBar():Prompt("Enter name of workspace to open ", "", "workspace",
+    function(input)
+        return workspaceCompletion(input, allWorkspaces)
+    end
+    ,
+    function(input)
+        if input == "" then return end
+
+        local found = false
+
+        for _, ws in ipairs(allWorkspaces) do
+            if ws.name == input then
+                baseDir = ws.path
+                found = true
+                break
+            end
+        end
+
+        if found then
+            treeTable = fetchFiles(baseDir)
+            rebuildView()
+            micro.InfoBar():Message("Switched to workspace: "..input)
+        else
+            micro.InfoBar():Message("There is now workspace with name: "..input)
+        end
+
+    end
+    )
 end
 
 -- ===========================
@@ -583,7 +638,7 @@ function rebuildView()
 end
 
 function printWorkspaces(bp)
-	workspaces = getWorkspaces()
+	local workspaces = getWorkspaces()
 
 	local output = ""
 
