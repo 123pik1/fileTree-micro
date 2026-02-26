@@ -32,12 +32,14 @@ To use the file tree, follow these steps:
 1.  **Open the Tree:**
     Press `Ctrl+E` to open the command bar, type `filetree`, and press `Enter`.
     *(Note: This command toggles the side pane).*
+<img width="1911" height="1036" alt="photo1" src="https://github.com/user-attachments/assets/fbb5c4ff-a2e4-49b3-80c1-43ba0f703215" />
 
 2.  **Navigate:**
     Use the **Arrow Keys** (Up/Down) to move through the directory list.
 
 3.  **Open a File:**
     With a file selected in the tree pane, press **`o`** to open it in the editor.
+<img width="1919" height="1024" alt="photo2" src="https://github.com/user-attachments/assets/da76c9af-00c6-459b-90d7-04cdbb8929ac" />
 
 ## Configuration
 
