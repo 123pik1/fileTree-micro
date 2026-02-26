@@ -1,4 +1,4 @@
-VERSION = "1.0.1"
+VERSION = "1.2.0"
 
 local json = import("encoding/json")
 local micro = import("micro")
